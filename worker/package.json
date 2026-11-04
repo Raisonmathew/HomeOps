@@ -1,0 +1,21 @@
+{
+  "name": "homeops-worker",
+  "version": "0.1.0",
+  "description": "HomeOps Telegram Bot & Matching Engine Cloudflare Worker",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.8"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240320.0",
+    "typescript": "^5.4.3",
+    "vitest": "^1.4.0",
+    "wrangler": "^3.40.0"
+  }
+}

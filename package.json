@@ -1,0 +1,20 @@
+{
+  "name": "homeops",
+  "version": "0.1.0",
+  "description": "HomeOps - Two-sided technician marketplace MVP (Telegram Bot + Cloudflare Worker + Supabase + React Dashboard)",
+  "private": true,
+  "scripts": {
+    "worker:dev": "npm --prefix worker run dev",
+    "worker:deploy": "npm --prefix worker run deploy",
+    "dashboard:dev": "npm --prefix dashboard run dev",
+    "dashboard:build": "npm --prefix dashboard run build"
+  },
+  "keywords": [
+    "marketplace",
+    "telegram-bot",
+    "cloudflare-worker",
+    "supabase"
+  ],
+  "author": "HomeOps Team",
+  "license": "UNLICENSED"
+}
