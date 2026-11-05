@@ -18,6 +18,8 @@ HomeOps is a two-sided technician marketplace pilot connecting local customers w
 3. **Atomic Assignment**: Prevents race conditions and double-assignments when multiple technicians click Accept simultaneously via PostgreSQL transaction locks.
 4. **Direct Settlement**: HomeOps coordinates discovery, trust, and records; visiting charges, labor, parts, and payments are settled directly between customer and technician.
 
+> Production deployment: see [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ## Setup & Local Development
 
 ### 1. Supabase Setup
@@ -28,7 +30,7 @@ HomeOps is a two-sided technician marketplace pilot connecting local customers w
 ```bash
 cd worker
 npm install
-cp wrangler.example.toml wrangler.toml # Populate environment variables
+cp wrangler.example.toml wrangler.toml # Set SUPABASE_URL; put secrets in .dev.vars (see DEPLOYMENT.md)
 npm run dev
 ```
 

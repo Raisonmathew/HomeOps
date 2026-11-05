@@ -13,9 +13,9 @@
     "@supabase/supabase-js": "^2.39.8"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240320.0",
+    "@cloudflare/workers-types": "^5.20261104.1",
     "typescript": "^5.4.3",
     "vitest": "^1.4.0",
-    "wrangler": "^3.40.0"
+    "wrangler": "^4.158.0"
   }
 }

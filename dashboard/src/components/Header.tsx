@@ -1,5 +1,6 @@
 import React from 'react';
-import { Bell, ShieldCheck } from 'lucide-react';
+import { Bell, ShieldCheck, LogOut } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export const Header: React.FC = () => {
   return (
@@ -15,6 +16,13 @@ export const Header: React.FC = () => {
         <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors relative">
           <Bell className="w-5 h-5" />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-sky-500 rounded-full"></span>
+        </button>
+        <button
+          title="Sign out"
+          onClick={() => supabase.auth.signOut()}
+          className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+        >
+          <LogOut className="w-5 h-5" />
         </button>
         <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs">
           OP
