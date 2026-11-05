@@ -225,24 +225,33 @@ curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"  # bash
 `url` must be correct, `last_error_message` absent, `pending_update_count` near 0. The `secret_token` must equal the `TELEGRAM_WEBHOOK_SECRET` Worker secret exactly, otherwise the Worker returns 401.
 
 ---
-## 5. Operator Dashboard (Cloudflare Pages)
+## 5. Operator Dashboard (Cloudflare Workers static assets)
 
-Option A, Git integration (recommended): Cloudflare → **Workers & Pages → Create → Pages → Connect to Git**, select the repo, then:
+The dashboard deploys as a static-assets Worker configured by [`dashboard/wrangler.jsonc`](dashboard/wrangler.jsonc), which serves `dist/`. Its `"name"` must match the Worker name in Cloudflare (currently `homeops`).
+
+> Without `wrangler.jsonc`, `wrangler deploy` tries to auto-configure the Vite project and fails with *"The version of Vite used in the project ("5.4.21") cannot be automatically configured"*. Keep the file committed.
+
+Option A, Git integration (recommended): Cloudflare → **Workers & Pages → Create → Import a repository**, select the repo, then:
+- Project / Worker name: `homeops` (must match `wrangler.jsonc`)
 - Production branch: `main`
-- Root directory: `dashboard`
+- Root directory (Path): `dashboard`
 - Build command: `npm run build`
-- Build output directory: `dist`
-- Environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- Deploy command: `npx wrangler deploy`
+- **Build** variables (Settings → Build → *Variables and secrets*, **not** the runtime "Variables and Secrets" under Settings): `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Vite bakes them into the JavaScript at build time, so after adding or changing them, trigger a new build (Deployments → *Retry build*, or push a commit).
 
-Option B, direct upload:
-```bash
-cd dashboard
-VITE_SUPABASE_URL=https://xxx.supabase.co VITE_SUPABASE_ANON_KEY=eyJ... npm run build
-npx wrangler pages deploy dist --project-name homeops-dashboard
+Option B, deploy from your machine:
+```powershell
+cd D:\HomeOps\dashboard
+$env:VITE_SUPABASE_URL      = "https://<ref>.supabase.co"
+$env:VITE_SUPABASE_ANON_KEY = "<anon or sb_publishable_ key>"
+npm run build
+npx wrangler deploy
 ```
-Then, in Supabase → **Authentication → URL Configuration**, set Site URL to your `*.pages.dev` address.
+The dashboard URL is `https://homeops.<your-subdomain>.workers.dev`. In Supabase → **Authentication → URL Configuration**, set **Site URL** to it.
 
-Open the Pages URL and sign in with the operator account from step 1. A signed-in user who is not in `operator_profiles` sees a "not an active operator" screen.
+Open the dashboard URL and sign in with the operator account from step 1. A signed-in user who isn't in `operator_profiles` sees a "not an active operator" screen.
+
+> If the login page says *"Failed to fetch"* or the requests go to `example.supabase.co`, the `VITE_*` build variables were missing at build time. Add them as **build** variables and rebuild.
 
 ---
 ## 6. End-to-end smoke test

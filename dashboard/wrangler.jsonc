@@ -1,0 +1,10 @@
+{
+  // Static-assets-only Worker that serves the built dashboard (dist/).
+  // "name" must match the Worker/project name in the Cloudflare dashboard.
+  "name": "homeops",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
