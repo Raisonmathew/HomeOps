@@ -7,7 +7,7 @@ import { applyAsTechnician } from '../technicians/technician-registration';
 import { addTechnicianSkill } from '../technicians/skills';
 import { setTechnicianOnline, setTechnicianOffline } from '../technicians/availability';
 import { processAtomicAssignment } from '../matching/assignment';
-import { startRematch } from '../matching/search';
+import { startRematch, retryUnmatchedRequests } from '../matching/search';
 import { markTechnicianComplete } from '../requests/completion';
 import { cancelServiceRequest } from '../requests/cancellation';
 import { recordEstimate } from '../requests/estimate-record';
@@ -342,6 +342,7 @@ export async function handleTechnician(ctx: BotContext): Promise<boolean> {
       `🟢 *You are online* (${option.label.toLowerCase()}).\nTravel radius: ${radiusKm} km.\nNew job offers will appear here.`,
       KeyboardBuilder.technicianMainMenu(true)
     );
+    await retryUnmatchedRequests(supabase, ctx.sender, tech.id);
     return true;
   }
 

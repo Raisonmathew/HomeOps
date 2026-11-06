@@ -17,7 +17,8 @@ export const STATE_TRANSITIONS: Record<RequestStatus, StateTransitionRule> = {
   SEARCHING: {
     // Back to searching when the technician drops out before work starts (technician cancel,
     // no-contact timeout, or the customer asking for someone else), so the customer still gets help.
-    allowedFrom: ['REQUESTED', 'ASSIGNED', 'CONTACTED', 'DISCUSSING_SCOPE', 'AGREED'],
+    // From NO_TECHNICIAN_FOUND when an eligible technician comes online (retryUnmatchedRequests).
+    allowedFrom: ['REQUESTED', 'ASSIGNED', 'CONTACTED', 'DISCUSSING_SCOPE', 'AGREED', 'NO_TECHNICIAN_FOUND'],
     allowedRoles: ['CUSTOMER', 'TECHNICIAN', 'OPERATOR', 'ADMIN'],
   },
   ASSIGNED: {

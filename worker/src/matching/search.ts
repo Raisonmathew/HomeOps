@@ -2,12 +2,57 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { MessageSender } from '../telegram/message-sender';
 import { CustomerNotifications } from '../notifications/customer-notifications';
 import { dispatchOfferBatch } from './offer-batches';
-import { findCandidates, SearchRequest, toSearchRequest } from './candidates';
+import { findCandidates, SearchRequest, toSearchRequest, SEARCH_FIELDS } from './candidates';
+import { logRequestEvent } from '../security/audit-events';
 import { Rematch } from '../requests/cancellation';
 import { formatWindow } from '../telegram/format';
 import { SEARCH_CONFIG } from '../config/constants';
 
 export const MAX_OFFER_BATCHES = 3;
+
+/**
+ * A technician just went online: re-open unmatched requests (NO_TECHNICIAN_FOUND, slot not over)
+ * that they are eligible for, and search again. Requests they can't take are left alone, so the
+ * customer isn't told "no technician found" twice.
+ */
+export async function retryUnmatchedRequests(supabase: SupabaseClient, messageSender: MessageSender, technicianId: string): Promise<void> {
+  const { data } = await supabase
+    .from('service_requests')
+    .select(SEARCH_FIELDS)
+    .eq('status', 'NO_TECHNICIAN_FOUND')
+    .gt('preferred_end_time', new Date().toISOString())
+    .order('created_at', { ascending: false })
+    .limit(10); // shortcut: newest 10 only, move to a cron if unmatched requests pile up
+
+  for (const row of (data ?? []) as any[]) {
+    const req = toSearchRequest(row);
+    const candidates = await findCandidates(supabase, req);
+    if (!candidates.some((c) => c.technician.technician_id === technicianId)) continue;
+
+    // Guarded on status; PROCESSING keeps the batch cron out until runSearchBatch finalizes.
+    const { data: reopened } = await supabase
+      .from('service_requests')
+      .update({
+        status: 'SEARCHING',
+        current_offer_batch: 0,
+        batch_progression_status: 'PROCESSING',
+        batch_progression_claimed_at: new Date().toISOString(),
+      })
+      .eq('id', req.id)
+      .eq('status', 'NO_TECHNICIAN_FOUND')
+      .select('id');
+    if (!reopened?.length) continue;
+
+    await logRequestEvent(supabase, {
+      serviceRequestId: req.id,
+      eventType: 'SEARCH_REOPENED',
+      oldStatus: 'NO_TECHNICIAN_FOUND',
+      newStatus: 'SEARCHING',
+      notes: 'An eligible technician came online; searching again.',
+    });
+    await runSearchBatch(supabase, messageSender, req, 1);
+  }
+}
 
 /**
  * After a request lost its technician (reopenSearch): tell the customer what happens next and,
