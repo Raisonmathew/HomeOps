@@ -39,8 +39,15 @@ export async function handleTelegramWebhook(
     });
 
   if (idempotencyErr) {
-    // Duplicate update, return 200 immediately
-    return new Response('OK', { status: 200 });
+    // 23505 = unique_violation: Telegram re-delivered an update we already handled.
+    if (idempotencyErr.code === '23505') {
+      return new Response('OK', { status: 200 });
+    }
+    // Anything else (bad Supabase key, missing tables, network) is a real failure.
+    // Log it and return 500 so it shows in `wrangler tail` and Telegram's getWebhookInfo
+    // instead of the bot going silent.
+    console.error('Supabase error recording Telegram update:', idempotencyErr);
+    return new Response('Database unavailable', { status: 500 });
   }
 
   const { userId, chatId, firstName, username, text, isCallback, callbackData, callbackQueryId, location } = parsed;
