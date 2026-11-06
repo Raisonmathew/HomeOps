@@ -26,6 +26,32 @@ export async function runJobSweeps(supabase: SupabaseClient, sender: MessageSend
   await unconfirmedSweep(supabase, sender);
   await staleJobSweep(supabase);
   await suspendedTechnicianSweep(supabase, sender, supportChatId);
+  await verificationNotifySweep(supabase, sender);
+}
+
+/** Messages technicians when an operator changes their application status on the dashboard. */
+async function verificationNotifySweep(supabase: SupabaseClient, sender: MessageSender): Promise<void> {
+  const { data } = await supabase
+    .from('technician_profiles')
+    .select('id, verification_status, verification_notified_status, profile:profiles!technician_profiles_profile_id_fkey(telegram_user_id)');
+  const messages: Record<string, { text: string; online?: boolean }> = {
+    UNDER_REVIEW: { text: '🔍 *Your technician application is being reviewed* by the HomeOps team.' },
+    APPROVED: {
+      text: '🎉 *You are approved as a HomeOps technician!*\n\nTap *🟢 Go Online* whenever you are ready to receive nearby jobs.',
+      online: true,
+    },
+    REJECTED: { text: "Your technician application wasn't approved this time. Contact 🆘 Support from the menu to find out why." },
+    SUSPENDED: { text: '⛔ Your technician profile has been suspended. You will not receive new jobs. Contact 🆘 Support for details.' },
+  };
+  for (const t of (data ?? []) as any[]) {
+    if (t.verification_status === t.verification_notified_status) continue;
+    const msg = messages[t.verification_status];
+    const chatId = t.profile?.telegram_user_id;
+    if (msg && chatId) {
+      await sender.sendMessage({ chatId, text: msg.text, replyMarkup: msg.online ? KeyboardBuilder.technicianMainMenu(false) : undefined });
+    }
+    await supabase.from('technician_profiles').update({ verification_notified_status: t.verification_status }).eq('id', t.id);
+  }
 }
 
 /**

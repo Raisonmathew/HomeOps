@@ -54,7 +54,20 @@ export async function handleCustomer(ctx: BotContext): Promise<boolean> {
   // ---------------------------------------------------------------- menu / abort
   if (u.text === '/start' || u.callbackData === 'cmd_customer_portal') {
     await clearStep(ctx);
-    await reply(ctx, BOT_TEXTS.WELCOME_CUSTOMER, KeyboardBuilder.customerMainMenu());
+    // Everyone is a customer; people who applied as technicians also see where that stands.
+    const { data: tech } = await supabase.from('technician_profiles').select('verification_status').eq('profile_id', profile.id).maybeSingle();
+    const techLine: Record<string, string> = {
+      APPLIED: '🔧 Technician application: *submitted, waiting for review*. We will message you here when you are approved.',
+      UNDER_REVIEW: '🔧 Technician application: *being reviewed*. We will message you here when you are approved.',
+      APPROVED: '🔧 You are also an *approved technician*: tap 🛠 Switch / Apply as Technician to go online and see jobs.',
+      REJECTED: '🔧 Technician application: *not approved*. Contact 🆘 Support for details.',
+      SUSPENDED: '🔧 Technician profile: *suspended*. Contact 🆘 Support for details.',
+    };
+    await reply(
+      ctx,
+      `${BOT_TEXTS.WELCOME_CUSTOMER}\n\n👤 You are in the *customer menu*.${tech ? `\n${techLine[tech.verification_status] ?? ''}` : ''}`,
+      KeyboardBuilder.customerMainMenu()
+    );
     return true;
   }
   if (u.callbackData === 'cust_abort') {
@@ -91,6 +104,10 @@ export async function handleCustomer(ctx: BotContext): Promise<boolean> {
       .select('id, name')
       .eq('active', true)
       .order('display_order', { ascending: true });
+    if (!categories?.length) {
+      await reply(ctx, 'No services are available right now. Please try again later.', KeyboardBuilder.customerMainMenu());
+      return true;
+    }
     await reply(ctx, '🛠 *What do you need help with?*', {
       inline_keyboard: [...(categories ?? []).map((c) => [{ text: c.name, callback_data: `cat:${c.id}` }]), ABORT_ROW],
     });

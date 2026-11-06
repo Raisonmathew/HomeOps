@@ -19,6 +19,7 @@ import { SEARCH_FIELDS, toSearchRequest } from '../matching/candidates';
 import { onlineUntilOptions } from './format';
 import { promptRating } from './shared-flow';
 import { storeIdDocument } from '../technicians/verification-docs';
+import { alertOperators } from '../trust/safety';
 import { CANCEL_REASONS, SAFETY_CONFIG, LIMITS_CONFIG } from '../config/constants';
 import { REOPENABLE_STATUSES } from '../requests/cancellation';
 import { raiseFlag, customerReliabilityStrikes, technicianCancelsThisWeek } from '../trust/flags';
@@ -50,7 +51,10 @@ export async function handleTechnician(ctx: BotContext): Promise<boolean> {
     if (tech.verification_status !== 'APPROVED') {
       await reply(
         ctx,
-        `🔧 *Technician Application*\nStatus: \`${tech.verification_status}\`\n\nAn operator reviews every application. You'll be able to go online once you're approved.`,
+        `🔧 *Technician Application*\nStatus: \`${tech.verification_status}\`\n\n` +
+          (tech.verification_status === 'REJECTED' || tech.verification_status === 'SUSPENDED'
+            ? 'Contact 🆘 Support from the customer menu for details.'
+            : "✅ Your application is with the HomeOps team. You'll get a message here as soon as you're approved, then you can go online and receive jobs."),
         { inline_keyboard: [[{ text: '👤 Switch to Customer Menu', callback_data: 'cmd_customer_portal' }]] }
       );
       return true;
@@ -194,10 +198,26 @@ export async function handleTechnician(ctx: BotContext): Promise<boolean> {
       return true;
     }
     for (const catId of (data.categoryIds as string[]) ?? []) await addTechnicianSkill(supabase, tech.id, catId);
+    const { count: idDocs } = await supabase
+      .from('attachments')
+      .select('id', { count: 'exact', head: true })
+      .eq('uploaded_by', profile.id)
+      .eq('attachment_type', 'VERIFICATION_DOCUMENT');
     await reply(
       ctx,
-      '✅ *Application submitted!*\n\nAn operator will review your details and skills. You can go online and receive nearby jobs once approved. Check your status any time with /technician.',
+      '✅ *Your technician application has been submitted for verification.*\n\n' +
+        '*What happens next*\n' +
+        '1️⃣ The HomeOps team checks your ID and skills.\n' +
+        "2️⃣ You'll get a message *here* as soon as you are approved.\n" +
+        '3️⃣ Then tap *🟢 Go Online* to start receiving jobs.\n\n' +
+        `Status now: \`APPLIED\` (under review)${idDocs ? '' : '\n⚠️ No ID document yet: add one from /technician → My Work Profile, or we cannot approve you.'}\n\n` +
+        '_Until then you can keep using HomeOps as a customer. Check your status any time with /technician._',
       { inline_keyboard: [[{ text: '👤 Back to Customer Menu', callback_data: 'cmd_customer_portal' }]] }
+    );
+    await alertOperators(
+      ctx.sender,
+      ctx.config.supportChatId,
+      `📝 *New technician application* from ${escapeMd(profile.full_name)}${idDocs ? '' : ' (no ID document yet)'}.\nReview it on the dashboard → Verification.`
     );
     return true;
   }
@@ -847,7 +867,7 @@ async function sendSkillPicker(ctx: BotContext, selected: string[], excludeIds: 
   const available = (categories ?? []).filter((c) => !excludeIds.includes(c.id));
   if (!available.length) {
     await clearStep(ctx);
-    await reply(ctx, 'You already have every service category.', profileButtons());
+    await reply(ctx, categories?.length ? 'You already have every service category.' : 'No services are available right now. Please try again later.', profileButtons());
     return;
   }
 
