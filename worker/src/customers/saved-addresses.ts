@@ -7,6 +7,7 @@ export interface SavedAddress {
   address_text: string;
   latitude: number;
   longitude: number;
+  locality: string | null;
 }
 
 export async function getCustomerSavedAddresses(
@@ -30,6 +31,7 @@ export async function saveCustomerAddress(
     addressText: string;
     latitude: number;
     longitude: number;
+    locality?: string | null;
   }
 ): Promise<boolean> {
   const { error } = await supabase.from('customer_addresses').insert({
@@ -38,7 +40,9 @@ export async function saveCustomerAddress(
     address_text: address.addressText,
     latitude: address.latitude,
     longitude: address.longitude,
+    locality: address.locality ?? null,
   });
+  if (error) console.error('Failed to save address:', error);
 
   return !error;
 }

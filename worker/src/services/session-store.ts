@@ -6,38 +6,44 @@ export interface UserSession {
   updated_at: number;
 }
 
-// NOTE: This in-memory store is scoped to a single Cloudflare Worker isolate.
-// Cloudflare Workers may run across many isolates; sessions will be lost on
-// cold starts or when a request lands on a different instance, breaking
-// multi-step Telegram conversations.  For production hardening, replace this
-// Map with Cloudflare KV writes (setUserSession / getUserSession already
-// accept a SupabaseClient parameter for this migration path).
-const memorySessions = new Map<number, UserSession>();
+// Sessions live in the bot_sessions table: Worker memory is per-isolate, so a
+// multi-step flow would otherwise lose its state between messages.
+const SESSION_TTL_MS = 30 * 60 * 1000;
 
 export async function getUserSession(
   telegramUserId: number,
-  _supabase?: SupabaseClient
+  supabase: SupabaseClient
 ): Promise<UserSession | null> {
-  const cached = memorySessions.get(telegramUserId);
-  if (cached && Date.now() - cached.updated_at < 30 * 60 * 1000) {
-    return cached;
+  const { data, error } = await supabase
+    .from('bot_sessions')
+    .select('step, data, updated_at')
+    .eq('telegram_user_id', telegramUserId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Failed to load bot session:', error);
+    return null;
   }
-  return null;
+  if (!data) return null;
+
+  const updatedAt = new Date(data.updated_at).getTime();
+  if (Date.now() - updatedAt > SESSION_TTL_MS) return null;
+  return { step: data.step, data: data.data ?? {}, updated_at: updatedAt };
 }
 
 export async function setUserSession(
   telegramUserId: number,
   step: string,
   data: Record<string, unknown> = {},
-  _supabase?: SupabaseClient
+  supabase: SupabaseClient
 ): Promise<void> {
-  memorySessions.set(telegramUserId, {
-    step,
-    data,
-    updated_at: Date.now(),
-  });
+  const { error } = await supabase
+    .from('bot_sessions')
+    .upsert({ telegram_user_id: telegramUserId, step, data, updated_at: new Date().toISOString() });
+  if (error) console.error('Failed to save bot session:', error);
 }
 
-export async function clearUserSession(telegramUserId: number): Promise<void> {
-  memorySessions.delete(telegramUserId);
+export async function clearUserSession(telegramUserId: number, supabase: SupabaseClient): Promise<void> {
+  const { error } = await supabase.from('bot_sessions').delete().eq('telegram_user_id', telegramUserId);
+  if (error) console.error('Failed to clear bot session:', error);
 }

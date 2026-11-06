@@ -7,6 +7,7 @@ import {
   Activity,
   AlertTriangle,
   Sliders,
+  Star,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -28,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
     { id: 'users', label: 'Users', icon: Users },
     { id: 'technicians', label: 'Verification', icon: UserCheck },
     { id: 'monitoring', label: 'Monitoring', icon: Activity },
+    { id: 'reviews', label: 'Reviews', icon: Star },
     { id: 'complaints', label: 'Complaints', icon: AlertTriangle },
     { id: 'config', label: 'Configuration', icon: Sliders },
   ];

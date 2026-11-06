@@ -7,10 +7,15 @@ workers_dev = true
 enabled = true
 
 [triggers]
-crons = ["* * * * *"]
+# every minute: offer-batch progression; 21:30 UTC (03:00 IST): retention & metrics (src/index.ts DAILY_CRON)
+crons = ["* * * * *", "30 21 * * *"]
 
 # Non-secret config only. Secrets are set with `wrangler secret put`:
 #   TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET,
 #   SUPABASE_SERVICE_ROLE_KEY, INTERNAL_API_SECRET
 [vars]
 SUPABASE_URL = "https://your-project.supabase.co"
+# Only this origin may call /api/operator/* from a browser
+DASHBOARD_ORIGIN = "https://homeops.your-subdomain.workers.dev"
+# Telegram chat ID of the operator group that receives Support messages; empty disables it
+SUPPORT_CHAT_ID = ""

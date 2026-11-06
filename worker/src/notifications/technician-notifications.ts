@@ -1,5 +1,6 @@
 import { MessageSender } from '../telegram/message-sender';
 import { KeyboardBuilder } from '../telegram/keyboard-builder';
+import { escapeMd } from '../telegram/format';
 
 export const TechnicianNotifications = {
   async notifyAssignmentWon(
@@ -25,29 +26,28 @@ export const TechnicianNotifications = {
     // 2. Telegram username (https://t.me/username)
     // 3. User ID mention link
     // 4. Bot-mediated relay
-    let contactInfo = '💬 _Direct messaging enabled in this chat (Bot Relay)_';
+    // A tg://user link isn't guaranteed to work (privacy settings), so the relay is the fallback (spec §18.2).
+    let contactInfo = '💬 Send your messages here in this chat and the bot will forward them.';
 
     if (assignmentDetails.customerPhone) {
       contactInfo = `📞 [${assignmentDetails.customerPhone}](tel:${assignmentDetails.customerPhone})`;
     } else if (assignmentDetails.customerUsername) {
-      contactInfo = `✈️ [@${assignmentDetails.customerUsername}](https://t.me/${assignmentDetails.customerUsername})`;
-    } else if (assignmentDetails.customerTelegramUserId) {
-      contactInfo = `👤 [Customer Profile](tg://user?id=${assignmentDetails.customerTelegramUserId})`;
+      contactInfo = `✈️ [@${escapeMd(assignmentDetails.customerUsername)}](https://t.me/${assignmentDetails.customerUsername})`;
     }
 
     const text =
       `🎯 *Assignment Confirmed! (${assignmentDetails.requestNumber})*\n\n` +
-      `👤 *Customer:* ${assignmentDetails.customerName}\n` +
+      `👤 *Customer:* ${escapeMd(assignmentDetails.customerName)}\n` +
       `📱 *Contact:* ${contactInfo}\n` +
-      `📍 *Exact Address:* ${assignmentDetails.serviceAddress || 'Coordinates on Map'}\n` +
-      `📝 *Issue Details:* ${assignmentDetails.description || 'No description'}\n` +
-      `🗺 *Map Navigation:* [Open in Google Maps](${mapUrl})\n\n` +
-      `Please contact the customer promptly to agree on visiting charges and schedule.`;
+      `📍 *Address:* ${escapeMd(assignmentDetails.serviceAddress || 'See map')}\n` +
+      `📝 *Problem:* ${escapeMd(assignmentDetails.description || 'No description')}\n` +
+      `🗺 [Open in Google Maps](${mapUrl})\n\n` +
+      `Contact the customer to agree on visit charge, scope and timing, then update the job below.`;
 
     return messageSender.sendMessage({
       chatId,
       text,
-      replyMarkup: KeyboardBuilder.technicianJobStatusButtons(assignmentDetails.requestId),
+      replyMarkup: KeyboardBuilder.technicianJobStatusButtons(assignmentDetails.requestId, 'ASSIGNED'),
     });
   },
 

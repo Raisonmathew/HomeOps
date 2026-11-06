@@ -41,6 +41,42 @@ export class MessageSender {
     }
   }
 
+  /**
+   * Downloads a file the user sent. Telegram download URLs contain the bot token and expire,
+   * so the URL is used once here and never stored (spec §18.4).
+   */
+  async downloadFile(fileId: string): Promise<ArrayBuffer | null> {
+    const meta = (await (await fetch(`${this.baseUrl}/getFile?file_id=${encodeURIComponent(fileId)}`)).json()) as any;
+    if (!meta.ok || !meta.result?.file_path) {
+      console.error('Telegram getFile failed:', meta.description);
+      return null;
+    }
+    const res = await fetch(`https://api.telegram.org/file/bot${this.botToken}/${meta.result.file_path}`);
+    return res.ok ? res.arrayBuffer() : null;
+  }
+
+  /** Re-sends a photo by Telegram file_id (photos stay on Telegram, spec §18.4). */
+  async sendPhoto(chatId: number, fileId: string, caption?: string): Promise<boolean> {
+    const response = await fetch(`${this.baseUrl}/sendPhoto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, photo: fileId, caption }),
+    });
+    if (!response.ok) console.error(`Telegram sendPhoto failed (${response.status}):`, await response.text());
+    return response.ok;
+  }
+
+  /** Replaces the inline keyboard of a message the bot already sent. */
+  async editReplyMarkup(chatId: number, messageId: number, replyMarkup: InlineKeyboardMarkup): Promise<boolean> {
+    const response = await fetch(`${this.baseUrl}/editMessageReplyMarkup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, message_id: messageId, reply_markup: replyMarkup }),
+    });
+    if (!response.ok) console.error(`Telegram editMessageReplyMarkup failed (${response.status}):`, await response.text());
+    return response.ok;
+  }
+
   async answerCallbackQuery(params: {
     callbackQueryId: string;
     text?: string;

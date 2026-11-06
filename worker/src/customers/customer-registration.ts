@@ -1,6 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Profile } from '../types/database';
-import { PRIVACY_TERMS_VERSION } from '../config/constants';
 
 export async function getOrCreateCustomerProfile(
   supabase: SupabaseClient,
@@ -39,8 +38,9 @@ export async function getOrCreateCustomerProfile(
       full_name: fullName,
       role: 'CUSTOMER',
       account_status: 'ACTIVE',
-      accepted_terms_version: PRIVACY_TERMS_VERSION,
-      accepted_terms_at: new Date().toISOString(),
+      // Consent is recorded only when the user taps "I agree" (webhook-handler terms gate, spec §6.1)
+      accepted_terms_version: null,
+      accepted_terms_at: null,
       allow_direct_contact_after_assignment: true,
     })
     .select('*')

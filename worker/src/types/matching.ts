@@ -12,6 +12,8 @@ export interface CandidateTechnician {
   current_longitude: number;
   effective_radius_km: number;
   location_expires_at: string;
+  /** End of the technician's availability session (spec §6.3) */
+  available_until?: string;
   active_assignments_count: number;
   average_rating: number;
   completed_request_count: number;

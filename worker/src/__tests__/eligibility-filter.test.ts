@@ -28,6 +28,25 @@ const baseTechnician: CandidateTechnician = {
   has_category_skill: true,
 };
 
+describe('availability window', () => {
+  it('rejects a technician whose session ends before the requested start', async () => {
+    const { evaluateEligibility } = await import('../matching/eligibility-filter');
+    const base = {
+      technician_id: 't', profile_id: 'p', telegram_user_id: 1, full_name: 'T', account_status: 'ACTIVE',
+      verification_status: 'APPROVED', current_latitude: 12.97, current_longitude: 77.59, effective_radius_km: 10,
+      location_expires_at: new Date(Date.now() + 8 * 3600e3).toISOString(),
+      available_until: new Date(Date.now() + 1 * 3600e3).toISOString(),
+      active_assignments_count: 0, average_rating: 0, completed_request_count: 0, acceptance_rate: 1, completion_rate: 1,
+      post_acceptance_cancellation_rate: 0, complaint_rate: 0, probation_status: 'ACTIVE' as const,
+      recent_offer_count_7d: 0, recent_assignment_count_30d: 0, created_at: new Date().toISOString(),
+      has_exact_skill: true, has_category_skill: true,
+    };
+    const inTwoHours = new Date(Date.now() + 2 * 3600e3).toISOString();
+    expect(evaluateEligibility(base, 12.97, 77.59, inTwoHours).eligible).toBe(false);
+    expect(evaluateEligibility(base, 12.97, 77.59, new Date().toISOString()).eligible).toBe(true);
+  });
+});
+
 describe('Eligibility Filter', () => {
   it('approves an active, approved technician within radius', () => {
     // 2 km away

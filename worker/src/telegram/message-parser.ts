@@ -12,15 +12,21 @@ export interface ParsedUpdate {
   isCallback: boolean;
   callbackData?: string;
   callbackQueryId?: string;
+  /** For callbacks: the bot message the button was on (lets us edit it in place) */
+  messageId?: number;
   text?: string;
   command?: string;
   commandArgs?: string;
   location?: { latitude: number; longitude: number };
-  contact?: { phoneNumber: string; firstName: string };
+  /** userId is set by Telegram only when the contact belongs to a Telegram account */
+  contact?: { phoneNumber: string; firstName: string; userId?: number };
   /** file_id of the largest photo variant (for sending/displaying) */
   photoFileId?: string;
   /** file_unique_id — stable across bot tokens, used for de-duplication (spec §18.4) */
   photoFileUniqueId?: string;
+  photoFileSize?: number;
+  /** A non-photo media message (document, video, voice...) that flows should reject */
+  otherMedia?: boolean;
 }
 
 export function parseTelegramUpdate(update: TelegramUpdate): ParsedUpdate | null {
@@ -35,6 +41,7 @@ export function parseTelegramUpdate(update: TelegramUpdate): ParsedUpdate | null
       isCallback: true,
       callbackData: cb.data,
       callbackQueryId: cb.id,
+      messageId: cb.message?.message_id,
     };
   }
 
@@ -74,10 +81,12 @@ export function parseTelegramUpdate(update: TelegramUpdate): ParsedUpdate | null
         ? { latitude: msg.location.latitude, longitude: msg.location.longitude }
         : undefined,
       contact: msg.contact
-        ? { phoneNumber: msg.contact.phone_number, firstName: msg.contact.first_name }
+        ? { phoneNumber: msg.contact.phone_number, firstName: msg.contact.first_name, userId: msg.contact.user_id }
         : undefined,
       photoFileId: largestPhoto?.file_id,
       photoFileUniqueId: largestPhoto?.file_unique_id,
+      photoFileSize: largestPhoto?.file_size,
+      otherMedia: !!((msg as any).document || (msg as any).video || (msg as any).voice || (msg as any).audio || (msg as any).sticker),
     };
   }
 

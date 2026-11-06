@@ -11,6 +11,8 @@ export async function setTechnicianOnline(
   }
 ): Promise<boolean> {
   const hours = params.validHours || 8;
+  // Close any previous session first, so matching never sees two ONLINE rows with different locations.
+  await setTechnicianOffline(supabase, technicianId);
   const now = new Date();
   const expiresAt = new Date(now.getTime() + hours * 60 * 60 * 1000);
 

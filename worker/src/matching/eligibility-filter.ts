@@ -5,7 +5,9 @@ import { BATCH_CONFIG } from '../config/constants';
 export function evaluateEligibility(
   technician: CandidateTechnician,
   customerLat: number,
-  customerLon: number
+  customerLon: number,
+  /** Preferred start of the request; the technician must still be online then (spec §6.5) */
+  requestStartIso?: string
 ): EligibilityResult {
   const reasons: string[] = [];
 
@@ -26,6 +28,11 @@ export function evaluateEligibility(
   const now = new Date();
   if (new Date(technician.location_expires_at) < now) {
     reasons.push('Current location session has expired');
+  }
+
+  // 3b. Availability overlaps the requested time
+  if (requestStartIso && technician.available_until && new Date(technician.available_until) < new Date(requestStartIso)) {
+    reasons.push('Technician is not available at the requested time');
   }
 
   // 4. Distance vs Effective Radius

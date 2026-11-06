@@ -3,6 +3,10 @@ import {
   ReplyKeyboardMarkup,
   ReplyKeyboardRemove,
 } from '../types/telegram';
+import { RequestStatus } from '../types/database';
+
+// Telegram rejects the whole message if any callback_data exceeds 64 bytes,
+// so callbacks carry at most one UUID (36 chars) plus a short prefix.
 
 export const KeyboardBuilder = {
   customerMainMenu(): InlineKeyboardMarkup {
@@ -12,6 +16,11 @@ export const KeyboardBuilder = {
         [{ text: '📋 My Requests', callback_data: 'cmd_my_requests' }],
         [{ text: '📍 Saved Addresses', callback_data: 'cmd_saved_addresses' }],
         [{ text: '🛠 Switch / Apply as Technician', callback_data: 'cmd_tech_portal' }],
+        [
+          { text: '🆘 Support', callback_data: 'cmd_support' },
+          { text: '🔒 Privacy', callback_data: 'cmd_privacy' },
+          { text: '📄 Terms', callback_data: 'cmd_terms' },
+        ],
       ],
     };
   },
@@ -26,7 +35,11 @@ export const KeyboardBuilder = {
         ],
         [{ text: '📋 Active Jobs', callback_data: 'tech_active_jobs' }],
         [{ text: '⚙️ My Work Profile & Skills', callback_data: 'tech_profile' }],
-        [{ text: '👤 Switch to Customer Menu', callback_data: 'cmd_customer_portal' }],
+        [{ text: '📊 Performance & History', callback_data: 'tech_history' }],
+        [
+          { text: '🆘 Support', callback_data: 'cmd_support' },
+          { text: '👤 Customer Menu', callback_data: 'cmd_customer_portal' },
+        ],
       ],
     };
   },
@@ -68,24 +81,55 @@ export const KeyboardBuilder = {
     };
   },
 
-  offerActionButtons(requestId: string, offerId: string): InlineKeyboardMarkup {
+  offerActionButtons(offerId: string): InlineKeyboardMarkup {
     return {
       inline_keyboard: [
         [
-          { text: '✅ Accept Offer', callback_data: `offer_accept:${requestId}:${offerId}` },
-          { text: '❌ Decline', callback_data: `offer_decline:${requestId}:${offerId}` },
+          { text: '✅ Accept', callback_data: `offer_accept:${offerId}` },
+          { text: '❌ Decline', callback_data: `offer_decline:${offerId}` },
         ],
       ],
     };
   },
 
-  technicianJobStatusButtons(requestId: string): InlineKeyboardMarkup {
+  /** Only the next valid step(s) for the job's current status (spec §6.8). */
+  technicianJobStatusButtons(requestId: string, status: RequestStatus): InlineKeyboardMarkup {
+    const b = (text: string, action: string) => [{ text, callback_data: `job:${action}:${requestId}` }];
+    const rows: Partial<Record<RequestStatus, { text: string; callback_data: string }[][]>> = {
+      ASSIGNED: [b('📞 I Contacted the Customer', 'CONTACTED'), b('❌ Cancel Job', 'CANCEL')],
+      CONTACTED: [b('🤝 Scope & Price Agreed', 'AGREE'), b('⚠️ Unable to Do This Job', 'UNABLE'), b('❌ Cancel Job', 'CANCEL')],
+      DISCUSSING_SCOPE: [b('🤝 Scope & Price Agreed', 'AGREE'), b('❌ Cancel Job', 'CANCEL')],
+      AGREED: [b('🔨 Work Started (needs customer code)', 'START'), b('❌ Cancel Job', 'CANCEL')],
+      IN_PROGRESS: [b('✅ Work Complete', 'DONE'), b('⚠️ Unable to Complete', 'UNABLE')],
+    };
+    const safetyRow = [
+      { text: '🚨 Safety', callback_data: `safety:${requestId}` },
+      { text: '🚩 Report customer', callback_data: `rep:${requestId}` },
+    ];
+    return { inline_keyboard: rows[status] ? [...rows[status]!, safetyRow] : [] };
+  },
+
+  customerConfirmCompletion(requestId: string): InlineKeyboardMarkup {
     return {
       inline_keyboard: [
-        [{ text: '📞 Customer Contacted', callback_data: `job_status:CONTACTED:${requestId}` }],
-        [{ text: '🔨 Work Started', callback_data: `job_status:IN_PROGRESS:${requestId}` }],
-        [{ text: '✅ Work Complete', callback_data: `job_status:TECH_COMPLETE:${requestId}` }],
-        [{ text: '⚠️ Unable to Complete', callback_data: `job_status:UNABLE:${requestId}` }],
+        [{ text: '✅ Yes, all done', callback_data: `done:FULL:${requestId}` }],
+        [{ text: '◐ Partly done', callback_data: `done:PARTIAL:${requestId}` }],
+        [{ text: '⚠️ Report a problem', callback_data: `done:PROBLEM:${requestId}` }],
+      ],
+    };
+  },
+
+  cancelRequestButton(requestId: string): InlineKeyboardMarkup {
+    return { inline_keyboard: [[{ text: '❌ Cancel request', callback_data: `req_cancel:${requestId}` }]] };
+  },
+
+  /** Direct-payment declaration (spec §6.7); used by both customer and technician. */
+  paymentButtons(requestId: string, asCustomer: boolean): InlineKeyboardMarkup {
+    return {
+      inline_keyboard: [
+        [{ text: asCustomer ? '✅ Yes, I paid' : '✅ Yes, I was paid', callback_data: `pay:PAID:${requestId}` }],
+        [{ text: '⏳ Not yet', callback_data: `pay:LATER:${requestId}` }],
+        [{ text: "⚠️ There's a payment problem", callback_data: `pay:DISPUTE:${requestId}` }],
       ],
     };
   },

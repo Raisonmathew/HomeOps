@@ -2,6 +2,29 @@ import { describe, it, expect } from 'vitest';
 import { canTransitionState } from '../requests/request-state-machine';
 
 describe('Request State Machine Transition Guards', () => {
+  it('re-opens the search when a technician drops out before work starts, but not once work is under way', () => {
+    for (const from of ['ASSIGNED', 'CONTACTED', 'DISCUSSING_SCOPE', 'AGREED'] as const) {
+      expect(canTransitionState(from, 'SEARCHING', 'TECHNICIAN'), from).toBe(true);
+    }
+    expect(canTransitionState('IN_PROGRESS', 'SEARCHING', 'TECHNICIAN')).toBe(false);
+    expect(canTransitionState('AGREED', 'CANCELLED_BY_CUSTOMER', 'CUSTOMER')).toBe(false); // customer must ask HomeOps
+  });
+
+  it('permits every transition the bot job buttons perform (technician-flow job:*)', () => {
+    const botTransitions: [string, string][] = [
+      ['ASSIGNED', 'CONTACTED'], // I Contacted the Customer
+      ['CONTACTED', 'AGREED'], // Scope & Price Agreed
+      ['DISCUSSING_SCOPE', 'AGREED'],
+      ['AGREED', 'IN_PROGRESS'],
+      ['IN_PROGRESS', 'TECHNICIAN_MARKED_COMPLETE'], // Work Complete
+      ['IN_PROGRESS', 'UNABLE_TO_COMPLETE'], // Unable to Complete
+      ['CONTACTED', 'UNABLE_TO_COMPLETE'],
+    ];
+    for (const [from, to] of botTransitions) {
+      expect(canTransitionState(from as any, to as any, 'TECHNICIAN'), `${from} → ${to}`).toBe(true);
+    }
+  });
+
   it('allows Customer to create REQUESTED from DRAFT', () => {
     expect(canTransitionState('DRAFT', 'REQUESTED', 'CUSTOMER')).toBe(true);
   });

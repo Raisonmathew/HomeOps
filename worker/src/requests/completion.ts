@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { logRequestEvent } from '../security/audit-events';
+import { closeRelay } from './relay';
 
 export async function markTechnicianComplete(
   supabase: SupabaseClient,
@@ -60,10 +61,12 @@ export async function confirmCustomerCompletion(
       completed_at: new Date().toISOString(),
     })
     .eq('id', requestId)
+    .eq('status', 'CUSTOMER_CONFIRMATION_PENDING') // only after the technician marked it complete
     .select('assigned_technician_id')
     .single();
 
   if (error || !request) return false;
+  await closeRelay(supabase, requestId);
 
   await logRequestEvent(supabase, {
     serviceRequestId: requestId,

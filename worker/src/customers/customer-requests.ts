@@ -8,11 +8,18 @@ export interface CreateServiceRequestInput {
   issueTypeId: string;
   description: string;
   serviceAddressText?: string;
+  /** General area shown in pre-assignment offers (spec §6.6) */
+  serviceLocality?: string | null;
   serviceLatitude: number;
   serviceLongitude: number;
   urgency?: UrgencyLevel;
   preferredStartTime?: string;
   preferredEndTime?: string;
+  /**
+   * true: the caller runs batch 1 right away, so the row is pre-claimed (PROCESSING) to keep the cron out.
+   * false: a scheduled slot; the cron starts the search SEARCH.LEAD_TIME_HOURS before it.
+   */
+  startSearchNow: boolean;
 }
 
 const DESCRIPTION_MAX_LENGTH = 1000;
@@ -61,14 +68,16 @@ export async function createServiceRequest(
       issue_type_id: input.issueTypeId,
       description: input.description,
       service_address_text: input.serviceAddressText || null,
+      service_locality: input.serviceLocality || null,
       service_latitude: input.serviceLatitude,
       service_longitude: input.serviceLongitude,
       preferred_start_time: startTime,
       preferred_end_time: endTime,
       urgency: input.urgency || 'NORMAL',
       status: 'SEARCHING',
-      current_offer_batch: 1,
-      batch_progression_status: 'IDLE',
+      current_offer_batch: 0,
+      batch_progression_status: input.startSearchNow ? 'PROCESSING' : 'IDLE',
+      batch_progression_claimed_at: input.startSearchNow ? now.toISOString() : null,
       search_started_at: now.toISOString(),
     })
     .select('*')

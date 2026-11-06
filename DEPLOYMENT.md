@@ -57,7 +57,16 @@ Open **SQL Editor** in the left sidebar. For each file below, in this exact orde
 | 3 | `supabase/migrations/00003_atomic_assignment.sql` | Matching RPCs: `accept_service_request_offer`, `claim_expired_search_requests`, `finalize_batch_progression`, `update_technician_metrics` |
 | 4 | `supabase/migrations/00004_security_hardening.sql` | RLS on remaining tables; restricts the RPCs to `service_role`; pins `search_path` |
 | 5 | `supabase/migrations/00005_operator_dashboard_access.sql` | Lets logged-in operators read the request audit trail, addresses, attachments and their own operator row, and manage the service catalog |
-| 6 | `supabase/seed.sql` | Service categories (Plumbing, Electrical, AC) and issue types |
+| 6 | `supabase/migrations/00006_api_role_grants.sql` | Table privileges for `service_role` (Worker) and `authenticated` (dashboard). Without it: *permission denied for table …* |
+| 7 | `supabase/migrations/00007_bot_sessions.sql` | `bot_sessions` table that stores the bot's multi-step conversation state |
+| 8 | `supabase/migrations/00008_request_flow_fixes.sql` | Locality columns, fair-rotation counter function, batch progression that advances once all offers are answered, expiry check on offer acceptance |
+| 9 | `supabase/migrations/00009_reviews_payments_config.sql` | Review tags, payment declaration, `marketplace_config` (dashboard-editable settings), scheduled-slot search, corrected technician metrics, daily maintenance function |
+| 10 | `supabase/migrations/00010_admin_mfa_enforcement.sql` | `is_operator()` requires MFA (aal2) for ADMIN operators |
+| 11 | `supabase/migrations/00011_review_reminders.sql` | `review_skips`: remembers "Skip this review" so the bot stops reminding |
+| 12 | `supabase/migrations/00012_trust_and_cancellation.sql` | Start PIN, closure reason, automatic flags in the complaints queue, SLA/limit settings, ratings counted only for confirmed jobs |
+| 13 | `supabase/migrations/00013_rematch_after_cancellation.sql` | Scheduler never searches before a booking's slot is near, so re-opened bookings wait for their slot instead of failing |
+| 14 | `supabase/migrations/00014_safety.sql` | Chat transcripts (evidence), report categories and urgency, held ratings, warnings and account-action audit, private `verification-docs` bucket for technician IDs |
+| 15 | `supabase/seed.sql` | Service categories (Plumbing, Electrical, AC) and issue types |
 
 Each file runs once only. Running it again fails with *"already exists"*. To start over, see *Reset* below.
 
@@ -191,7 +200,12 @@ Verify:
 curl https://homeops-worker.<sub>.workers.dev/health
 # {"status":"healthy","service":"HomeOps Worker"}
 ```
-The cron trigger (`* * * * *`, every minute) is registered automatically on deploy; it expires stale offer batches. Confirm in Cloudflare dashboard → Workers → homeops-worker → Settings → Triggers.
+Two cron triggers are registered on deploy: every minute (offer-batch progression and scheduled-slot searches), and daily at 21:30 UTC / 03:00 IST (retention clean-up, fair-rotation counters, technician metrics).
+
+`[vars]` in `wrangler.toml` also holds `DASHBOARD_ORIGIN` (the only browser origin allowed to call `/api/operator/*`) and `SUPPORT_CHAT_ID`. To enable the bot's **Support** messages:
+1. Create a Telegram group for operators and add the bot to it.
+2. Run `npx wrangler tail` in `worker/` and send `/start` in the group (bots in privacy mode still receive commands). The log shows `ignored group chat -…` or `ignored supergroup chat -100…`; that negative number is the group ID. The bot never replies in groups.
+3. Put the ID in `SUPPORT_CHAT_ID` in `wrangler.toml` and run `npm run deploy`. Confirm in Cloudflare dashboard → Workers → homeops-worker → Settings → Triggers.
 
 For local dev use a `worker/.dev.vars` file (git-ignored) with the same four secret names instead of `wrangler.toml` values.
 
@@ -238,7 +252,7 @@ Option A, Git integration (recommended): Cloudflare → **Workers & Pages → Cr
 - Root directory (Path): `dashboard`
 - Build command: `npm run build`
 - Deploy command: `npx wrangler deploy`
-- **Build** variables (Settings → Build → *Variables and secrets*, **not** the runtime "Variables and Secrets" under Settings): `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Vite bakes them into the JavaScript at build time, so after adding or changing them, trigger a new build (Deployments → *Retry build*, or push a commit).
+- **Build** variables (Settings → Build → *Variables and secrets*, **not** the runtime "Variables and Secrets" under Settings): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and optionally `VITE_WORKER_URL` (defaults to `https://homeops-worker.homeops-app.workers.dev`; used for operator assign/cancel). Vite bakes them into the JavaScript at build time, so after adding or changing them, trigger a new build (Deployments → *Retry build*, or push a commit).
 
 Option B, deploy from your machine:
 ```powershell

@@ -1,11 +1,13 @@
 import { MessageSender } from '../telegram/message-sender';
 import { KeyboardBuilder } from '../telegram/keyboard-builder';
+import { escapeMd } from '../telegram/format';
 
 export const CustomerNotifications = {
   async notifyTechnicianMatched(
     messageSender: MessageSender,
     chatId: number,
     techDetails: {
+      requestId: string;
       fullName: string;
       categoryName: string;
       rating: number;
@@ -13,62 +15,67 @@ export const CustomerNotifications = {
       phoneNumber?: string | null;
       telegramUsername?: string | null;
       telegramUserId?: number | null;
-      distanceKm: number;
+      distanceKm: number | null;
+      /** Customer gives this to the technician on arrival; it's needed to start work */
+      startPin: string;
     }
   ): Promise<boolean> {
-    let contactInfo = '💬 _Direct messaging enabled in this chat (Bot Relay)_';
-
+    // Contact fallback order (spec §18.2); the bot relay always works as the last resort.
+    let contactInfo = '💬 Send your messages here in this chat and the bot will forward them.';
     if (techDetails.phoneNumber) {
       contactInfo = `📞 [${techDetails.phoneNumber}](tel:${techDetails.phoneNumber})`;
     } else if (techDetails.telegramUsername) {
-      contactInfo = `✈️ [@${techDetails.telegramUsername}](https://t.me/${techDetails.telegramUsername})`;
-    } else if (techDetails.telegramUserId) {
-      contactInfo = `👤 [Technician Profile](tg://user?id=${techDetails.telegramUserId})`;
+      contactInfo = `✈️ [@${escapeMd(techDetails.telegramUsername)}](https://t.me/${techDetails.telegramUsername})`;
     }
 
     const text =
       `🎉 *Technician Found!*\n\n` +
-      `👤 *Name:* ${techDetails.fullName}\n` +
-      `🛠 *Approved Skill:* ${techDetails.categoryName}\n` +
-      `⭐ *Rating:* ${techDetails.rating > 0 ? techDetails.rating.toFixed(1) : 'New (Verified)'}\n` +
-      `📦 *Completed Jobs:* ${techDetails.completedJobs}\n` +
-      `📱 *Contact:* ${contactInfo}\n` +
-      `📏 *Initial Distance:* ~${techDetails.distanceKm} km\n\n` +
-      `_Pricing, scope of work, and payment are agreed directly with the technician._`;
+      `👤 *Name:* ${escapeMd(techDetails.fullName)}\n` +
+      `🛠 *Approved skill:* ${escapeMd(techDetails.categoryName)}\n` +
+      `⭐ *Rating:* ${techDetails.completedJobs > 0 ? `${techDetails.rating.toFixed(1)}/5` : 'New technician (verified)'}\n` +
+      `📦 *Completed through HomeOps:* ${techDetails.completedJobs}\n` +
+      (techDetails.distanceKm !== null ? `📏 *Approx. starting distance:* ${techDetails.distanceKm} km\n` : '') +
+      `📱 *Contact:* ${contactInfo}\n\n` +
+      `🔑 *Your start code: ${techDetails.startPin}*\nGive it to the technician only when they arrive. They need it to start work.\n\n` +
+      `_Discuss scope, price, payment, and warranty directly before work begins. You can also message the technician through this chat._`;
 
     return messageSender.sendMessage({
       chatId,
       text,
+      replyMarkup: {
+        inline_keyboard: [
+          [{ text: '🔁 Request another technician', callback_data: `req_reassign:${techDetails.requestId}` }],
+          [{ text: '❌ Cancel request', callback_data: `req_cancel:${techDetails.requestId}` }],
+        ],
+      },
     });
   },
 
   async notifyWorkMarkedComplete(
     messageSender: MessageSender,
     chatId: number,
-    requestId: string
+    requestId: string,
+    requestNumber: string,
+    notes: string[] = []
   ): Promise<boolean> {
-    const text =
-      `🏁 *Technician marked your service request as complete!*\n\n` +
-      `Please confirm whether the work was completed satisfactorily. How was your experience?`;
-
     return messageSender.sendMessage({
       chatId,
-      text,
-      replyMarkup: KeyboardBuilder.ratingButtons(requestId),
+      text:
+        `🏁 *The technician marked \`${requestNumber}\` as complete.*\n\n` +
+        (notes.length ? `${notes.join('\n')}\n\n` : '') +
+        `Was the work actually completed? Only confirm if it was.`,
+      replyMarkup: KeyboardBuilder.customerConfirmCompletion(requestId),
     });
   },
 
-  async notifyNoTechnicianFound(
-    messageSender: MessageSender,
-    chatId: number
-  ): Promise<boolean> {
-    const text =
-      `⚠️ *No nearby technician available right now.*\n\n` +
-      `All eligible technicians in your area are currently busy or offline. We have escalated this to operator review.`;
-
+  async notifyNoTechnicianFound(messageSender: MessageSender, chatId: number): Promise<boolean> {
     return messageSender.sendMessage({
       chatId,
-      text,
+      text:
+        `⚠️ *No technician is available right now.*\n\n` +
+        `Nearby technicians are busy, offline, or didn't respond. Our team has been alerted and may contact you. ` +
+        `You can also try again later.`,
+      replyMarkup: KeyboardBuilder.customerMainMenu(),
     });
   },
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Download, RefreshCw } from 'lucide-react';
 
 export const PageHeader: React.FC<{
   title: string;
@@ -97,6 +97,23 @@ const BADGE_COLORS: Record<string, string> = {
   OPEN: 'bg-rose-100 text-rose-800',
   RESOLVED: 'bg-emerald-100 text-emerald-800',
   ACCOUNT_ACTION_TAKEN: 'bg-indigo-100 text-indigo-800',
+  URGENT: 'bg-rose-600 text-white',
+  // complaint categories
+  HARASSMENT: 'bg-rose-100 text-rose-800',
+  UNSAFE: 'bg-red-100 text-red-800',
+  FRAUD: 'bg-orange-100 text-orange-800',
+  SERVICE: 'bg-sky-100 text-sky-800',
+  PAYMENT: 'bg-violet-100 text-violet-800',
+  OTHER: 'bg-gray-100 text-gray-700',
+  AUTO: 'bg-indigo-100 text-indigo-800',
+  // payment declaration (HomeOps records, never verifies, direct payment)
+  NOT_APPLICABLE: 'bg-gray-100 text-gray-600',
+  DIRECT_PAYMENT_CONFIRMED_BY_CUSTOMER: 'bg-emerald-100 text-emerald-800',
+  DIRECT_PAYMENT_CONFIRMED_BY_TECHNICIAN: 'bg-teal-100 text-teal-800',
+  PAYMENT_DISPUTE_REPORTED: 'bg-rose-100 text-rose-800',
+  // estimate acknowledgement
+  NOT_REVIEWED: 'bg-gray-100 text-gray-600',
+  ACKNOWLEDGED: 'bg-emerald-100 text-emerald-800',
 };
 
 export const Badge: React.FC<{ value: string | null | undefined }> = ({ value }) => (
@@ -107,6 +124,36 @@ export const Badge: React.FC<{ value: string | null | undefined }> = ({ value })
   >
     {value ?? '-'}
   </span>
+);
+
+/** 1-5 star score, e.g. ★★★★☆ */
+export const Stars: React.FC<{ score: number }> = ({ score }) => (
+  <span className="whitespace-nowrap" title={`${score} / 5`}>
+    <span className="text-amber-500">{'★'.repeat(score)}</span>
+    <span className="text-gray-300">{'★'.repeat(Math.max(0, 5 - score))}</span>
+  </span>
+);
+
+export const Tags: React.FC<{ tags: string[] | null | undefined }> = ({ tags }) =>
+  tags?.length ? (
+    <span className="inline-flex flex-wrap gap-1">
+      {tags.map((t) => (
+        <span key={t} className="px-1.5 py-0.5 bg-gray-100 text-gray-700 text-[11px] rounded font-medium">
+          {t}
+        </span>
+      ))}
+    </span>
+  ) : null;
+
+export const ExportButton: React.FC<{ onClick: () => void; disabled?: boolean }> = ({ onClick, disabled }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+  >
+    <Download className="w-3.5 h-3.5" />
+    Export CSV
+  </button>
 );
 
 export const Table: React.FC<{ headers: string[]; children: React.ReactNode }> = ({ headers, children }) => (

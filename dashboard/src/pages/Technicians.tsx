@@ -11,6 +11,31 @@ const FILTERS: Record<string, string[] | null> = {
   ALL: null,
 };
 
+interface IdDocument {
+  id: string;
+  uploaded_by: string;
+  storage_path: string;
+  created_at: string;
+}
+
+/** Opens a short-lived signed URL for a file in the private verification-docs bucket. */
+const openIdDocument = async (doc: IdDocument) => {
+  // Open the tab synchronously (inside the click) so popup blockers allow it, then point it at the signed URL.
+  const tab = window.open('', '_blank');
+  const { data, error } = await supabase.storage.from('verification-docs').createSignedUrl(doc.storage_path, 300);
+  if (error || !data?.signedUrl) {
+    tab?.close();
+    alert(`Could not open the ID document: ${error?.message ?? 'no signed URL returned'}`);
+    return;
+  }
+  if (tab) {
+    tab.opener = null;
+    tab.location.href = data.signedUrl;
+  } else {
+    window.open(data.signedUrl, '_blank', 'noopener');
+  }
+};
+
 const TECH_SELECT =
   'id, verification_status, probation_status, experience_years, profile_summary, base_latitude, base_longitude, default_radius_km, created_at, ' +
   'profile:profiles!technician_profiles_profile_id_fkey(id, full_name, phone_number, telegram_username, account_status), ' +
@@ -24,7 +49,24 @@ export const Technicians: React.FC = () => {
     let q = supabase.from('technician_profiles').select(TECH_SELECT).order('created_at', { ascending: false });
     const statuses = FILTERS[filter];
     if (statuses) q = q.in('verification_status', statuses);
-    return must(await q) as any[];
+    const techs = must(await q) as any[];
+
+    // ID documents for every listed technician in one query (uploaded_by = the technician's profiles.id).
+    const profileIds = techs.map((t) => t.profile?.id).filter(Boolean);
+    const docs = profileIds.length
+      ? (must(
+          await supabase
+            .from('attachments')
+            .select('id, uploaded_by, storage_path, created_at')
+            .eq('attachment_type', 'VERIFICATION_DOCUMENT')
+            .in('uploaded_by', profileIds)
+            .not('storage_path', 'is', null)
+            .order('created_at', { ascending: false })
+        ) as IdDocument[])
+      : [];
+    const docsByProfile: Record<string, IdDocument[]> = {};
+    for (const d of docs) (docsByProfile[d.uploaded_by] ??= []).push(d);
+    return techs.map((t) => ({ ...t, idDocs: docsByProfile[t.profile?.id] ?? [] }));
   }, [filter]);
 
   const run = async (techId: string, action: () => Promise<void>) => {
@@ -39,12 +81,23 @@ export const Technicians: React.FC = () => {
     }
   };
 
+  const approvePendingSkills = async (t: any) => {
+    const operatorProfileId = await currentOperatorProfileId();
+    if (!operatorProfileId) throw new Error('Your operator profile could not be found.');
+    // Spec §6.2: nobody approves their own technician profile or skills.
+    if (operatorProfileId === t.profile?.id) throw new Error('You cannot approve your own technician profile.');
+    await write(
+      supabase
+        .from('technician_skills')
+        .update({ approval_status: 'APPROVED', approved_by: operatorProfileId, approved_at: new Date().toISOString() })
+        .eq('technician_id', t.id)
+        .eq('approval_status', 'PENDING')
+    );
+  };
+
   const approve = (t: any) =>
     run(t.id, async () => {
-      const operatorProfileId = await currentOperatorProfileId();
-      if (!operatorProfileId) throw new Error('Your operator profile could not be found.');
-      // Spec §6.2: nobody approves their own technician profile or skills.
-      if (operatorProfileId === t.profile?.id) throw new Error('You cannot approve your own technician profile.');
+      await approvePendingSkills(t); // runs the self-approval check first
       await write(
         supabase
           .from('technician_profiles')
@@ -53,13 +106,6 @@ export const Technicians: React.FC = () => {
             ...(t.probation_status === 'NOT_STARTED' ? { probation_status: 'ACTIVE' } : {}),
           })
           .eq('id', t.id)
-      );
-      await write(
-        supabase
-          .from('technician_skills')
-          .update({ approval_status: 'APPROVED', approved_by: operatorProfileId, approved_at: new Date().toISOString() })
-          .eq('technician_id', t.id)
-          .eq('approval_status', 'PENDING')
       );
     });
 
@@ -99,6 +145,7 @@ export const Technicians: React.FC = () => {
             const p = t.profile ?? {};
             const disabled = busy === t.id;
             const pending = t.verification_status === 'APPLIED' || t.verification_status === 'UNDER_REVIEW';
+            const idDocs: IdDocument[] = t.idDocs;
             return (
               <div key={t.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 flex flex-wrap items-start justify-between gap-4">
                 <div className="space-y-2">
@@ -130,6 +177,22 @@ export const Technicians: React.FC = () => {
                     (Radius: {t.default_radius_km} km)
                   </p>
                   {t.profile_summary && <p className="text-sm text-gray-500 italic">"{t.profile_summary}"</p>}
+                  <div className="flex flex-wrap items-center gap-3">
+                    {idDocs.length === 0 ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">No ID document</span>
+                    ) : (
+                      idDocs.map((d, i) => (
+                        <button
+                          key={d.id}
+                          onClick={() => openIdDocument(d)}
+                          title={`Uploaded ${timeAgo(d.created_at)}. Opens a link valid for 5 minutes.`}
+                          className="text-sm font-medium text-sky-700 hover:underline"
+                        >
+                          🪪 View ID document{idDocs.length > 1 ? ` ${i + 1}` : ''}
+                        </button>
+                      ))
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {(t.skills ?? []).length === 0 ? (
                       <span className="text-xs text-gray-400">No skills submitted</span>
@@ -152,7 +215,17 @@ export const Technicians: React.FC = () => {
                           Start Review
                         </ActionButton>
                       )}
-                      <ActionButton disabled={disabled} onClick={() => approve(t)} icon={Check} tone="green">
+                      <ActionButton
+                        disabled={disabled || idDocs.length === 0}
+                        onClick={() => approve(t)}
+                        icon={Check}
+                        tone="green"
+                        title={
+                          idDocs.length === 0
+                            ? 'Cannot approve yet: no ID document uploaded. Spec §6.2 requires verification information before approval; ask the technician to send their ID in the bot.'
+                            : undefined
+                        }
+                      >
                         Approve
                       </ActionButton>
                       <ActionButton disabled={disabled} onClick={() => reject(t)} icon={X} tone="red">
@@ -162,6 +235,11 @@ export const Technicians: React.FC = () => {
                   )}
                   {t.verification_status === 'APPROVED' && (
                     <>
+                      {(t.skills ?? []).some((s: any) => s.approval_status === 'PENDING') && (
+                        <ActionButton disabled={disabled} onClick={() => run(t.id, () => approvePendingSkills(t))} icon={Check} tone="green">
+                          Approve New Skills
+                        </ActionButton>
+                      )}
                       {t.probation_status !== 'COMPLETED' && (
                         <ActionButton disabled={disabled} onClick={() => completeProbation(t)} icon={Award} tone="indigo">
                           Complete Probation
@@ -205,13 +283,18 @@ const ActionButton: React.FC<{
   icon: React.ComponentType<{ className?: string }>;
   tone: keyof typeof TONES;
   children: React.ReactNode;
-}> = ({ onClick, disabled, icon: Icon, tone, children }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 ${TONES[tone]}`}
-  >
-    <Icon className="w-3.5 h-3.5" />
-    {children}
-  </button>
+  /** Tooltip; set on a wrapper too, because some browsers show no tooltip for a disabled button. */
+  title?: string;
+}> = ({ onClick, disabled, icon: Icon, tone, children, title }) => (
+  <span title={title} className={disabled && title ? 'cursor-not-allowed' : undefined}>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none ${TONES[tone]}`}
+    >
+      <Icon className="w-3.5 h-3.5" />
+      {children}
+    </button>
+  </span>
 );

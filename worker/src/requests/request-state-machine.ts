@@ -15,8 +15,10 @@ export const STATE_TRANSITIONS: Record<RequestStatus, StateTransitionRule> = {
     allowedRoles: ['CUSTOMER'],
   },
   SEARCHING: {
-    allowedFrom: ['REQUESTED', 'ASSIGNED'], // Can return to searching if tech cancels
-    allowedRoles: ['CUSTOMER', 'OPERATOR', 'ADMIN'],
+    // Back to searching when the technician drops out before work starts (technician cancel,
+    // no-contact timeout, or the customer asking for someone else), so the customer still gets help.
+    allowedFrom: ['REQUESTED', 'ASSIGNED', 'CONTACTED', 'DISCUSSING_SCOPE', 'AGREED'],
+    allowedRoles: ['CUSTOMER', 'TECHNICIAN', 'OPERATOR', 'ADMIN'],
   },
   ASSIGNED: {
     allowedFrom: ['SEARCHING'],
@@ -89,6 +91,7 @@ export const STATE_TRANSITIONS: Record<RequestStatus, StateTransitionRule> = {
       'AGREED',
       'IN_PROGRESS',
       'DISPUTED',
+      'CUSTOMER_CONFIRMATION_PENDING', // escalated "never confirmed" jobs (sweeps.ts)
     ],
     allowedRoles: ['OPERATOR', 'ADMIN'],
   },
