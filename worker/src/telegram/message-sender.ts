@@ -30,6 +30,10 @@ export class MessageSender {
           reply_markup: params.replyMarkup,
         }),
       });
+      if (!response.ok) {
+        // e.g. 401 bad bot token, 400 Markdown parse error, 403 user blocked the bot
+        console.error(`Telegram sendMessage failed (${response.status}):`, await response.text());
+      }
       return response.ok;
     } catch (err) {
       console.error('Failed to send Telegram message:', err);

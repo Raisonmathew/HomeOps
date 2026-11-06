@@ -8,6 +8,7 @@ import { Technicians } from './pages/Technicians';
 import { Monitoring } from './pages/Monitoring';
 import { Complaints } from './pages/Complaints';
 import { Config } from './pages/Config';
+import { Users } from './pages/Users';
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState('overview');
@@ -32,6 +33,8 @@ export const App: React.FC = () => {
         return <Overview />;
       case 'requests':
         return <Requests />;
+      case 'users':
+        return <Users />;
       case 'technicians':
         return <Technicians />;
       case 'monitoring':

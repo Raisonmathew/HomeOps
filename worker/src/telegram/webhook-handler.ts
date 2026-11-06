@@ -27,8 +27,14 @@ export async function handleTelegramWebhook(
   const parsed = parseTelegramUpdate(update);
 
   if (!parsed) {
+    // e.g. my_chat_member (user started/blocked the bot), edited_message, channel posts
+    const kind = Object.keys(update).filter((k) => k !== 'update_id').join(',') || 'unknown';
+    console.log(`Update ${update.update_id}: ignored (type: ${kind})`);
     return new Response('OK', { status: 200 });
   }
+  console.log(
+    `Update ${update.update_id}: ${parsed.isCallback ? `callback "${parsed.callbackData}"` : `message "${parsed.text ?? '[non-text]'}"`} from user ${parsed.userId}`
+  );
 
   // Idempotency: verify update hasn't already been processed (Spec v1.1 Section 7.15)
   const { error: idempotencyErr } = await supabase
@@ -41,6 +47,7 @@ export async function handleTelegramWebhook(
   if (idempotencyErr) {
     // 23505 = unique_violation: Telegram re-delivered an update we already handled.
     if (idempotencyErr.code === '23505') {
+      console.log(`Update ${update.update_id}: duplicate delivery, already processed`);
       return new Response('OK', { status: 200 });
     }
     // Anything else (bad Supabase key, missing tables, network) is a real failure.

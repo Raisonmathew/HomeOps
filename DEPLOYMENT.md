@@ -56,7 +56,8 @@ Open **SQL Editor** in the left sidebar. For each file below, in this exact orde
 | 2 | `supabase/migrations/00002_row_level_security.sql` | RLS on tables, `is_operator()`, operator policies, `updated_at` triggers |
 | 3 | `supabase/migrations/00003_atomic_assignment.sql` | Matching RPCs: `accept_service_request_offer`, `claim_expired_search_requests`, `finalize_batch_progression`, `update_technician_metrics` |
 | 4 | `supabase/migrations/00004_security_hardening.sql` | RLS on remaining tables; restricts the RPCs to `service_role`; pins `search_path` |
-| 5 | `supabase/seed.sql` | Service categories (Plumbing, Electrical, AC) and issue types |
+| 5 | `supabase/migrations/00005_operator_dashboard_access.sql` | Lets logged-in operators read the request audit trail, addresses, attachments and their own operator row, and manage the service catalog |
+| 6 | `supabase/seed.sql` | Service categories (Plumbing, Electrical, AC) and issue types |
 
 Each file runs once only. Running it again fails with *"already exists"*. To start over, see *Reset* below.
 
@@ -66,7 +67,7 @@ Run from the repo root (`D:\HomeOps`). This needs Node only, no Docker.
 npx supabase login                                     # opens browser, creates an access token
 npx supabase init                                      # first time only; creates supabase/config.toml. Answer "N" to the VS Code / Deno prompts
 npx supabase link --project-ref <your-project-ref>     # asks for the DB password from 1.1
-npx supabase db push --remote --include-seed           # applies 00001..00004, then seed.sql to the linked cloud project
+npx supabase db push --remote --include-seed           # applies 00001..00005, then seed.sql to the linked cloud project
 ```
 Don't drop `--remote`: without it, newer CLI versions target a local Docker database (`127.0.0.1:54322`) and fail with `ECONNREFUSED`. `db push` records applied migrations, so later you only add new files (e.g. `00005_*.sql`) and run `db push` again.
 
@@ -255,16 +256,22 @@ Open the dashboard URL and sign in with the operator account from step 1. A sign
 
 ---
 ## 6. End-to-end smoke test
-1. Message your bot `/start` from Telegram; the bot should reply and a row should appear in `profiles`.
-2. Register as a technician through the bot; the application appears in the dashboard's Technicians page for approval.
-3. From a second Telegram account, create a customer request; confirm it appears under Requests and offers go out to approved, online technicians.
-4. If nothing happens, run `npx wrangler tail` in `worker/` and watch logs while sending a message.
+1. **Run the Worker self-check.** It reports the Supabase key type, table access and Telegram's webhook status in one call, without printing any secret:
+   ```powershell
+   curl.exe -H "Authorization: Bearer <INTERNAL_API_SECRET>" https://homeops-worker.<sub>.workers.dev/internal/diagnostics
+   ```
+   Everything should read `ok:` / `N rows`. `webhook_url` should be your `/webhook` URL and `last_error_message` should be `null`. Anything marked `WRONG`, `ERROR` or `MISSING` is the problem to fix first.
+2. Message your bot `/start` from Telegram. The bot should reply, and the user should appear on the dashboard's **Users** page.
+3. From a second Telegram account, create a customer request. Confirm it appears under **Requests**, and that offers go out to approved, online technicians.
+4. If something doesn't work, run `npx wrangler tail` in `worker/` while you send a message. Every update now logs a line (`Update N: message "/start" from user …`) plus any Supabase or Telegram error.
 
 ## Troubleshooting
 | Symptom | Cause / fix |
 |---|---|
 | Bot silent, `getWebhookInfo` shows 401 | `secret_token` ≠ `TELEGRAM_WEBHOOK_SECRET` secret. Re-run `setWebhook`/`secret put`. |
-| `getWebhookInfo` shows 500 | Check `wrangler tail`; usually a wrong `SUPABASE_URL` or service_role key, or migrations not applied. |
+| `getWebhookInfo` shows 500 | Check `wrangler tail` or `/internal/diagnostics`. Usually a wrong `SUPABASE_URL` or service_role key, or migrations not applied. |
+| Diagnostics: `SUPABASE_SERVICE_ROLE_KEY: WRONG: JWT with role "anon"` (or `publishable`) | You stored the public key. Run `npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY` again with the **service_role** / `sb_secret_` key. |
+| Dashboard page shows "Could not load data … permission denied" or the audit trail is empty | Migration `00005_operator_dashboard_access.sql` not applied. |
 | Dashboard shows empty tables | User isn't in `operator_profiles` with `active = TRUE`, or the Pages env vars were set after build (rebuild). |
 | Dashboard login fails | User not confirmed or wrong password (Auth → Users). |
 | Batches never expire | Cron trigger missing; redeploy the Worker. |

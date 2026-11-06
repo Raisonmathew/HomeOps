@@ -4,6 +4,7 @@ import { handleTelegramWebhook } from './telegram/webhook-handler';
 import { processExpiredBatches } from './matching/batch-progression';
 import { MessageSender } from './telegram/message-sender';
 import { TelegramUpdate } from './types/telegram';
+import { runDiagnostics } from './services/diagnostics';
 
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
@@ -46,6 +47,18 @@ export default {
       const result = await processExpiredBatches(supabase, messageSender);
 
       return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Deployment self-check (see services/diagnostics.ts)
+    if (url.pathname === '/internal/diagnostics' && request.method === 'GET') {
+      const authHeader = request.headers.get('Authorization');
+      if (!env.INTERNAL_API_SECRET || authHeader !== `Bearer ${env.INTERNAL_API_SECRET}`) {
+        return new Response('Unauthorized internal invocation', { status: 401 });
+      }
+      return new Response(JSON.stringify(await runDiagnostics(env), null, 2), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });

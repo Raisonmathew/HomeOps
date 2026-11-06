@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   ClipboardList,
+  Users,
   UserCheck,
   Activity,
   AlertTriangle,
   Sliders,
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface SidebarProps {
   currentTab: string;
@@ -14,9 +16,16 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) => {
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+  }, []);
+
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'requests', label: 'Requests', icon: ClipboardList },
+    { id: 'users', label: 'Users', icon: Users },
     { id: 'technicians', label: 'Verification', icon: UserCheck },
     { id: 'monitoring', label: 'Monitoring', icon: Activity },
     { id: 'complaints', label: 'Complaints', icon: AlertTriangle },
@@ -55,8 +64,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab }) =
       </nav>
 
       <div className="p-4 border-t border-slate-800 text-xs text-slate-400">
-        <p className="font-medium text-slate-300">Pilot Locality: Whitefield</p>
-        <p className="mt-0.5">Status: Online</p>
+        <p className="text-slate-500">Signed in as</p>
+        <p className="mt-0.5 font-medium text-slate-300 truncate" title={email ?? ''}>{email ?? '...'}</p>
       </div>
     </aside>
   );

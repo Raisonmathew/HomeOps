@@ -14,6 +14,13 @@ export async function getOrCreateCustomerProfile(
     .eq('telegram_user_id', telegramUserId)
     .single();
 
+  // PGRST116 = "no rows" from .single(), i.e. a new user. Anything else is a real failure
+  // (bad key, RLS blocking a non-service key, missing table) and must not be hidden.
+  if (selectError && selectError.code !== 'PGRST116') {
+    console.error('Failed to look up profile:', selectError);
+    return null;
+  }
+
   if (existing && !selectError) {
     if (telegramUsername && existing.telegram_username !== telegramUsername) {
       await supabase
@@ -44,5 +51,6 @@ export async function getOrCreateCustomerProfile(
     return null;
   }
 
+  console.log(`Created profile ${created.id} for Telegram user ${telegramUserId}`);
   return created as Profile;
 }
