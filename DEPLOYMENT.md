@@ -67,7 +67,8 @@ Open **SQL Editor** in the left sidebar. For each file below, in this exact orde
 | 13 | `supabase/migrations/00013_rematch_after_cancellation.sql` | Scheduler never searches before a booking's slot is near, so re-opened bookings wait for their slot instead of failing |
 | 14 | `supabase/migrations/00014_safety.sql` | Chat transcripts (evidence), report categories and urgency, held ratings, warnings and account-action audit, private `verification-docs` bucket for technician IDs |
 | 15 | `supabase/migrations/00015_verification_notifications.sql` | Remembers which application status each technician was told, so the bot can message them when an operator approves or rejects them |
-| 16 | `supabase/seed.sql` | Service categories (Plumbing, Electrical, AC) and issue types |
+| 16 | `supabase/migrations/00016_keep_current_batch_offers.sql` | Fix: offers stay valid after they are sent (previously expired instantly, so Accept always failed) |
+| 17 | `supabase/seed.sql` | Service categories (Plumbing, Electrical, AC) and issue types |
 
 Each file runs once only. Running it again fails with *"already exists"*. To start over, see *Reset* below.
 
